@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Treemap com D3.js</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .treemap rect {
+            stroke: #fff;
+            stroke-width: 1px;
+        }
+        .treemap text {
+            pointer-events: none;
+        }
+        h2, #treemap {
+            text-align: center;
+        }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h2>Treemap de CriptoMoedas</h2>
+    <div id="treemap"></div>
+    <div id="tooltip" class="tooltip"></div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        class Treemap {
+            constructor(apiKey, width = 960, height = 500) {
+                this.apiKey = apiKey;
+                this.width = width;
+                this.height = height;
+                this.svg = d3.select("#treemap")
+                    .append("svg")
+                    .attr("width", this.width)
+                    .attr("height", this.height);
+                this.treemapLayout = d3.treemap()
+                    .size([this.width, this.height])
+                    .padding(1);
+            }
+
+            fetchData() {
+                fetch("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd", {
+                    headers: {
+                        'Authorization': `Bearer ${this.apiKey}`
+                    }
+                })
+                .then(response => response.json())
+                .then(data => this.processData(data))
+                .catch(error => console.error('Erro ao carregar os dados:', error));
+            }
+
+            processData(data) {
+                const root = d3.hierarchy({
+                    name: 'root',
+                    children: data.map(d => ({
+                        name: d.name,
+                        value: d.market_cap,
+                        change: d.price_change_percentage_24h
+                    }))
+                }).sum(d => d.value);
+
+                this.treemapLayout(root);
+                this.render(root);
+            }
+
+            formatNumber(value) {
+                return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            }
+
+            render(root) {
+                const tooltip = d3.select("#tooltip");
+
+                this.svg.selectAll("rect")
+                    .data(root.leaves())
+                    .enter().append("rect")
+                    .attr("x", d => d.x0)
+                    .attr("y", d => d.y0)
+                    .attr("width", d => d.x1 - d.x0)
+                    .attr("height", d => d.y1 - d.y0)
+                    .attr("fill", d => d.data.change < 0 ? "#d15a61" : "#28A745")
+                    .attr("stroke", "#fff")
+                    .on("mouseover", (event, d) => {
+                        tooltip
+                            .style("display", "block")
+                            .html(`<strong>${d.data.name}</strong><br>Capitalização de Mercado: ${this.formatNumber(d.data.value)}<br>Variação: ${d.data.change.toFixed(2)}%`)
+                            .style("left", (event.pageX + 5) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", () => {
+                        tooltip.style("display", "none");
+                    });
+
+                this.svg.selectAll("text.name")
+                    .data(root.leaves())
+                    .enter().append("text")
+                    .attr("class", "name")
+                    .attr("x", d => d.x0 + 5)
+                    .attr("y", d => d.y0 + 15)
+                    .text(d => d.data.name)
+                    .attr("font-size", "12px")
+                    .attr("fill", "#fff");
+
+                this.svg.selectAll("text.value")
+                    .data(root.leaves())
+                    .enter().append("text")
+                    .attr("class", "value")
+                    .attr("x", d => d.x0 + 5)
+                    .attr("y", d => d.y0 + 30)
+                    .text(d => this.formatNumber(d.data.value))
+                    .attr("font-size", "12px")
+                    .attr("fill", "#fff");
+            }
+        }
+
+        const treemap = new Treemap('CG-5xPxc9R9ynj3EffADEQjpdLD');
+        treemap.fetchData();
+    </script>
+</body>
+</html>
